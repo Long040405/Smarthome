@@ -195,16 +195,6 @@ class SmartHomeApp:
         self.garage_button = tk.Button(self.control_panel_frame, command=self.garage, relief=tk.RIDGE)
         self.garage_button.place(x=10, y=230)
 
-        # Packed text radio buttons
-        for song_name in config.SONGS.keys():
-            radio = tk.Radiobutton(
-                self.control_panel_frame,
-                text=song_name,
-                variable=self.song_var,
-                value=song_name,
-                command=self.play_song
-            )
-            radio.pack(anchor=tk.W)
 
         # Image radio buttons
         radio1 = ttk.Radiobutton(self.control_panel_frame, image=self.photo1, variable=self.song_var, 
@@ -493,6 +483,20 @@ class SmartHomeApp:
         self.root.destroy()
 
 if __name__ == "__main__":
+    # Copy screenshots from brain folder to image folder if they exist
+    import os
+    import shutil
+    brain_dir = "/home/long/.gemini/antigravity/brain/4e1b371b-2891-43b2-a55e-24cea04efe0b"
+    dest_dir = "image"
+    if os.path.exists(brain_dir):
+        src1 = os.path.join(brain_dir, "media__1780640619310.png")
+        src2 = os.path.join(brain_dir, "media__1780640632986.png")
+        os.makedirs(dest_dir, exist_ok=True)
+        if os.path.exists(src1):
+            shutil.copy(src1, os.path.join(dest_dir, "ui_dipper.png"))
+        if os.path.exists(src2):
+            shutil.copy(src2, os.path.join(dest_dir, "ui_bill.png"))
+
     root = tk.Tk()
     app = SmartHomeApp(root)
     root.mainloop()

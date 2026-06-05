@@ -6,6 +6,18 @@ Dự án được xây dựng bằng ngôn ngữ Python, sử dụng thư viện
 
 ---
 
+## Giao diện chính của Dashboard
+
+Dưới đây là 2 phong cách giao diện chính của Dashboard Smarthome tương ứng với 2 chủ đề được lựa chọn trong ứng dụng:
+
+### 1. Chủ đề Dipper (Dipper Theme)
+![Giao diện Dashboard chủ đề Dipper](image/ui_dipper.png)
+
+### 2. Chủ đề Bill Cipher (Bill Cipher Theme)
+![Giao diện Dashboard chủ đề Bill Cipher](image/ui_bill.png)
+
+---
+
 ## Các Tính năng Nổi bật
 
 ### Bảo mật và Xác thực Đăng nhập
@@ -20,9 +32,8 @@ Dự án được xây dựng bằng ngôn ngữ Python, sử dụng thư viện
 ### Hiệu ứng Mở khóa Sinh động
 * Khi đăng nhập thành công, một đoạn video mở khóa ngắn (Video/wc.mp4) sẽ được phát trực tiếp trên màn hình thông qua thư viện OpenCV trước khi chuyển vào bảng điều khiển.
 
-### Trình phát nhạc nền đa nền tảng
-* Tích hợp 2 bài hát nền tương ứng với 2 phong cách giao diện khác nhau (Theme Song 1 & Theme Song 2).
-* Nhạc được phát lặp vô tận (loop) bằng pygame.mixer. Khi chuyển bài hát, giao diện và các nút điều khiển sẽ tự động đổi hình ảnh nền theo chủ đề đã chọn.
+### Nhạc nền tự động theo chủ đề
+* Nhạc nền được phát lặp vô tận (loop) bằng pygame.mixer và tự động thay đổi tương ứng với chủ đề giao diện (Dipper Theme & Bill Cipher Theme) được người dùng lựa chọn. Khi đổi chủ đề, hình nền và hệ thống các nút điều khiển sẽ tự động chuyển đổi đồng bộ.
 
 ### Quản lý và Điều khiển các Phòng
 * **Phòng ngủ (Bedroom)**: Điều khiển Đèn (Bật/Tắt/Nháy) đổi màu hình nền phòng theo chế độ Ngày/Đêm, Mở/Đóng cửa và hiển thị Nhiệt độ thời gian thực.
