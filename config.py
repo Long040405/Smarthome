@@ -1,14 +1,14 @@
 # Configuration settings for Smarthome application
 
 # Email warning credentials
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-SENDER_EMAIL = "smarthomekhoahocmaytinh2@gmail.com"
-SENDER_PASSWORD = "xepg wpss dbhp nddc"
-RECIPIENT_EMAIL = "long4th4@gmail.com"
+SMTP_SERVER = ""
+SMTP_PORT = 
+SENDER_EMAIL = ""
+SENDER_PASSWORD = ""
+RECIPIENT_EMAIL = ""
 
 # Serial Connection details
-SERIAL_PORT = "COM7"
+SERIAL_PORT = "COM*"
 SERIAL_BAUDRATE = 19200
 SERIAL_TIMEOUT = 1
 
