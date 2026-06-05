@@ -1,593 +1,498 @@
-import customtkinter as ctk
 import tkinter as tk
-from tkinter import messagebox
-from tkinter import ttk
 import tkinter.font as tkfont
+from tkinter import messagebox, ttk
 from PIL import Image, ImageTk
+# Compatibility patch for older Pillow versions (like 9.0.1)
+if not hasattr(Image, 'Resampling'):
+    Image.Resampling = Image
 import cv2
 import time
-import serial
 import pygame
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
-pygame.mixer.init()
+import config
+from serial_handler import SerialHandler
+from email_sender import send_warning_email
 
-W = tk.Tk()
-W.geometry('800x600+100+100')
+class SmartHomeApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Smarthome Dashboard")
+        self.root.geometry('800x600+100+100')
 
-fan_status = False
-door_status = False
-door_garage = False
-button_images = {
-    "Song 1": {
-        "hjhj": "sim.jpg",
-        "sd": "shit.jpg",
-        "door": "Door.jpg",
-        "living_room": "LivingRoom.jpg",
-        "bedroom": "Bedroom.jpg",
-        "garage": "GARAGE.jpg",
-    },
-    "Song 2": {
-        "hjhj": "new_sim.jpg",
-        "sd": "new_shutdown.jpg",
-        "door": "new_door.jpg",
-        "living_room": "new_livingroom.jpg",
-        "bedroom": "new_bedroom.jpg",
-        "garage": "new_garage.jpg",
-    },
+        # Global states
+        self.fan_status = False
+        self.door_status = False
+        self.door_garage = False
+        self.bedroom_light_status = False
+        self.livingroom_light_status = False
+        self.current_song = "opn.mp3"
+        self.wrong_attempts = 0
+        self.current_bg_key = "Day"
+        self.current_bg_livingroom_key = "DayLivingroom"
 
-}
-songs = {
-    "Song 1": "opn.mp3",
-    "Song 2": "opn1.mp3"
-}
-current_song = "opn.mp3"
-wrong_attempts = 0
-unlocked_video_path = 'wc.mp4' 
-error_image_path = 'Lock.jpg'  
-door_status = False  
-bedroom_light_status = False
-livingroom_light_status = False 
-background_images = {
-    "Day": "daybr.jpg",
-    "Night": "nightbr.jpg",
-}
-background_images_lvr = {
-    "DayLivingroom": "daylvr.jpg",
-    "NightLivingroom": "nightlvr.jpg"
-}
-background_images_control_panel = {
-    "Song 1": "Stanhome.jpg",
-    "Song 2": "Billhome.jpg"
-}
+        # Initialize Pygame Mixer
+        pygame.mixer.init()
 
-current_bg_key = "Day" 
-current_bg_livingroom_key = "DayLivingroom"  
-song_var = tk.StringVar(value=list(songs.keys())[0]) 
-radiobutton_font = tkfont.Font(family="Helvetica", size=12)
+        # Initialize Serial connection
+        self.serial = SerialHandler(config.SERIAL_PORT, config.SERIAL_BAUDRATE, config.SERIAL_TIMEOUT)
 
-style = ttk.Style()
-style.theme_use('clam')
+        # Tkinter variables
+        self.song_var = tk.StringVar(value=list(config.SONGS.keys())[0])
 
-style.configure("Custom.TRadiobutton",
-                background="white",
-                foreground="black",
-                font=("Arial", 12),
-                padding=5,
-                borderwidth=1,
-                relief="flat")
+        # Setup Styles and Frames
+        self.setup_styles()
+        self.create_frames()
 
-# Load images for radio buttons
-img1 = Image.open("Dipbo.png").resize((50, 50))
-img2 = Image.open("Piu.png").resize((50, 50))
+        # Setup Views
+        self.setup_password_frame()
+        self.setup_video_frame()
+        self.setup_control_panel_frame()
+        self.setup_bedroom_frame()
+        self.setup_livingroom_frame()
+        self.setup_garage_frame()
 
-photo1 = ImageTk.PhotoImage(img1)
-photo2 = ImageTk.PhotoImage(img2)
+        # Start background tasks
+        self.root.after(1000, self.read_temperature)
 
-# Define the SMTP server and port
-smtp_server = "smtp.gmail.com"
-smtp_port = 587
+        # Show initial view
+        self.show_frame(self.password_frame)
 
-# Email account credentials
-sender_email = "smarthomekhoahocmaytinh2@gmail.com"
-sender_password = "xepg wpss dbhp nddc"
+        # Window closing handler
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-# Recipient email
-recipient_email = "nhivu.31231020245@st.ueh.edu.vn"
+    def setup_styles(self):
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        self.style.configure(
+            "Custom.TRadiobutton",
+            background="white",
+            foreground="black",
+            font=("Arial", 12),
+            padding=5,
+            borderwidth=1,
+            relief="flat"
+        )
 
-# Create the MIME message
-message = MIMEMultipart()
-message["From"] = sender_email
-message["To"] = recipient_email
-message["Subject"] = "Cảnh Báo: Đăng Nhập Quá Nhiều Lần"
+    def create_frames(self):
+        self.password_frame = tk.Frame(self.root)
+        self.video_frame = tk.Frame(self.root)
+        self.control_panel_frame = tk.Frame(self.root)
+        self.bedroom_frame = tk.Frame(self.root)
+        self.living_room_frame = tk.Frame(self.root)
+        self.garage_frame = tk.Frame(self.root)
 
-# Nội dung email
-body = """\
-Chào bạn,
+        for frame in (self.password_frame, self.video_frame, self.control_panel_frame, 
+                      self.bedroom_frame, self.living_room_frame, self.garage_frame):
+            frame.grid(row=0, column=0, sticky='nsew')
 
-Hệ thống đã phát hiện số lượng đăng nhập không hợp lệ quá mức cho phép.
+    def setup_password_frame(self):
+        bg_image = Image.open(config.PASSWORD_BG_IMAGE).resize((800, 600), Image.Resampling.LANCZOS)
+        self.password_photo = ImageTk.PhotoImage(bg_image)
 
-Nếu bạn không thực hiện các hoạt động đăng nhập này, vui lòng liên hệ với bộ phận hỗ trợ ngay lập tức.
+        L1 = tk.Label(self.password_frame, image=self.password_photo)
+        L1.pack(pady=20)
 
-Cảm ơn bạn,
-~Nhóm LoNi2H~
-"""
-message.attach(MIMEText(body, "plain"))
+        custom_font = tkfont.Font(family="Algerian", size=20)
 
-# Khung để chứa các nút chọn bài hát
-control_panel_frame = tk.Frame(W)
-control_panel_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)  # Đặt khung ở giữa
+        label_password = tk.Label(L1, text="Nhập mật khẩu:", bg="black", fg="white", font=custom_font)
+        label_password.place(x=50, y=280)
 
-try:
-    s1 = serial.Serial('COM7', 19200, timeout=1)
-except serial.SerialException as e:
-    print(f"Error opening serial port: {e}")
+        self.entry = tk.Entry(L1, show="*", bg="black", fg="white", font=custom_font, width=10)
+        self.entry.place(x=70, y=330)
 
+        self.entry.focus_set()
 
+        self.entry.bind("<Return>", lambda event: self.check_password())
+        self.entry.bind("<KeyRelease>", lambda event: self.on_key_release(event))
 
-def update_button_images(song_name):
-    images = button_images.get(song_name, {})
-    
-    hjhj_image = create_button_image(images.get("hjhj", "sim.jpg"), (200, 100))
-    hjhj_button.config(image=hjhj_image)
-    hjhj_button.image = hjhj_image
-    
-    sd_image = create_button_image(images.get("sd", "shit.jpg"), (200, 100))
-    sd_button.config(image=sd_image)
-    sd_button.image = sd_image
-    
-    door_image = create_button_image(images.get("door", "Door.jpg"), (200, 100))
-    door_button.config(image=door_image)
-    door_button.image = door_image
-    
-    living_room_image = create_button_image(images.get("living_room", "LivingRoom.jpg"), (200, 100))
-    living_room_button.config(image=living_room_image)
-    living_room_button.image = living_room_image
-    
-    bedroom_image = create_button_image(images.get("bedroom", "Bedroom.jpg"), (200, 100))
-    bedroom_button.config(image=bedroom_image)
-    bedroom_button.image = bedroom_image
-    
-    garage_image = create_button_image(images.get("garage", "GARAGE.jpg"), (200, 100))
-    garage_button.config(image=garage_image)
-    garage_button.image = garage_image
-def play_song():
-    global current_song
-    selected_song = song_var.get()
-    if selected_song != current_song:
-        current_song = selected_song
-        song_path = songs[selected_song]
-        if pygame.mixer.music.get_busy():
-            pygame.mixer.music.stop()
-        pygame.mixer.music.load(song_path)
-        pygame.mixer.music.play(loops=-1)  # loops=-1 to loop indefinitely
-        change_background_control_panel(selected_song)
-        update_button_images(selected_song)
-def change_background_control_panel(song_name):
-    image_path = background_images_control_panel[song_name]
-    load_new_background_control_panel(image_path)
-def load_new_background_control_panel(image_path):
-    background_image = Image.open(image_path)
-    # Scale the image to fit the control panel frame dimensions (e.g., 800x600)
-    background_image = background_image.resize((800, 600), Image.Resampling.LANCZOS)
-    background_photo = ImageTk.PhotoImage(background_image)
-    background_label_control_panel.config(image=background_photo)
-    background_label_control_panel.image = background_photo  # Keep a reference
-for song_name in songs.keys():
-    radio = tk.Radiobutton(
-        control_panel_frame,
-        text=song_name,
-        variable=song_var,
-        value=song_name,
-        command=play_song
-      )
-    radio.pack(anchor=tk.W)
-def check_password():
-    global wrong_attempts
-    password = entry.get()
-    if password == '1111': 
-        print("Đăng nhập thành công!")
-        play_song()
-        show_frame(video_frame) 
-        play_unlocked_video(unlocked_video_path)      
-    else:
-        wrong_attempts += 1
-        if wrong_attempts >= 3:
-            both_lights_blink()
-            show_error_image()
-            mail()
-            W.withdraw()
+    def on_key_release(self, event):
+        if len(self.entry.get()) == 4:
+            self.check_password()
+
+    def check_password(self):
+        password = self.entry.get()
+        if password == config.ACCESS_PASSWORD:
+            print("Đăng nhập thành công!")
+            self.play_song()
+            self.show_frame(self.video_frame)
+            self.play_unlocked_video(config.UNLOCKED_VIDEO_PATH)
         else:
-            messagebox.showerror("Lỗi", "Sai mật khẩu! Bạn còn {} lần thử.".format(3 - wrong_attempts))
-            entry.delete(0, tk.END)
-            
-def play_unlocked_video(unlocked_video_path):
-    cap = cv2.VideoCapture(unlocked_video_path)
-    start_time = time.time()
-    def update_frame():
-        nonlocal start_time
-        ret, frame = cap.read()
-        if not ret:
-            cap.release()
-            cv2.destroyAllWindows()
-            show_frame(control_panel_frame) 
-            return
-        resized_frame = cv2.resize(frame, (800, 600))
-        cv2image = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGBA)
-        img = Image.fromarray(cv2image)
-        imgtk = ImageTk.PhotoImage(image=img)
-        video_label.imgtk = imgtk
-        video_label.configure(image=imgtk)
-        if time.time() - start_time >= 16:
-            cap.release()
-            cv2.destroyAllWindows()
-            show_frame(control_panel_frame)
-            return
-        video_label.after(15, update_frame)
-    update_frame()
+            self.wrong_attempts += 1
+            if self.wrong_attempts >= config.MAX_WRONG_ATTEMPTS:
+                self.both_lights_blink()
+                self.show_error_image()
+                send_warning_email()
+                self.root.withdraw()
+            else:
+                messagebox.showerror("Lỗi", f"Sai mật khẩu! Bạn còn {config.MAX_WRONG_ATTEMPTS - self.wrong_attempts} lần thử.")
+                self.entry.delete(0, tk.END)
 
-def show_error_image():
-    error_window = tk.Toplevel()
-    error_window.geometry('800x600+100+100')
+    def setup_video_frame(self):
+        self.video_label = tk.Label(self.video_frame)
+        self.video_label.pack()
 
-    error_image = Image.open(error_image_path)
-    error_image = error_image.resize((800, 600), Image.Resampling.LANCZOS)
-    error_photo = ImageTk.PhotoImage(error_image)
+    def play_unlocked_video(self, video_path):
+        cap = cv2.VideoCapture(video_path)
+        start_time = time.time()
 
-    error_label = tk.Label(error_window, image=error_photo)
-    error_label.image = error_photo  
-    error_label.pack()
+        def update_frame():
+            ret, frame = cap.read()
+            if not ret:
+                cap.release()
+                cv2.destroyAllWindows()
+                self.show_frame(self.control_panel_frame)
+                return
+            resized_frame = cv2.resize(frame, (800, 600))
+            cv2image = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGBA)
+            img = Image.fromarray(cv2image)
+            imgtk = ImageTk.PhotoImage(image=img)
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
 
-    def close_error_window():
-        error_window.destroy()
+            if time.time() - start_time >= 16:
+                cap.release()
+                cv2.destroyAllWindows()
+                self.show_frame(self.control_panel_frame)
+                return
+            self.video_label.after(15, update_frame)
 
-    error_window.after(5000, close_error_window)
+        update_frame()
 
-def both_lights_blink():
-    try:
-        s1.write(b"6")
-    except Exception as e:
-        print(f"Error: {e}")
+    def setup_control_panel_frame(self):
+        self.control_panel_frame.configure(bg="#F0F0F0")
 
-def show_frame(frame):
-    frame.tkraise()
+        # Load radio images
+        img1 = Image.open(config.RADIO_IMG1).resize((50, 50))
+        img2 = Image.open(config.RADIO_IMG2).resize((50, 50))
+        self.photo1 = ImageTk.PhotoImage(img1)
+        self.photo2 = ImageTk.PhotoImage(img2)
 
-def toggle_door():
-    global door_status
-    try:
-        if door_status:
-            s1.write(b"d") 
-            door_status = False
+        # Control panel background
+        initial_bg_path = config.BACKGROUND_IMAGES_CONTROL_PANEL["Song 1"]
+        bg_image = Image.open(initial_bg_path).resize((800, 600), Image.Resampling.LANCZOS)
+        self.bg_photo_control_panel = ImageTk.PhotoImage(bg_image)
+
+        self.background_label_control_panel = tk.Label(self.control_panel_frame, image=self.bg_photo_control_panel)
+        self.background_label_control_panel.place(x=0, y=0)
+        self.background_label_control_panel.lower()
+
+        # Control panel buttons
+        self.hjhj_button = tk.Button(self.control_panel_frame, command=self.hjhj, relief=tk.RIDGE)
+        self.hjhj_button.place(x=590, y=10)
+
+        self.sd_button = tk.Button(self.control_panel_frame, command=self.shjt, relief=tk.RIDGE)
+        self.sd_button.place(x=590, y=490)
+
+        self.door_button = tk.Button(self.control_panel_frame, command=self.toggle_door, relief=tk.RIDGE)
+        self.door_button.place(x=10, y=485)
+
+        self.living_room_button = tk.Button(self.control_panel_frame, command=self.living_room, relief=tk.RIDGE)
+        self.living_room_button.place(x=10, y=10)
+
+        self.bedroom_button = tk.Button(self.control_panel_frame, command=self.bedroom, relief=tk.RIDGE)
+        self.bedroom_button.place(x=10, y=120)
+
+        self.garage_button = tk.Button(self.control_panel_frame, command=self.garage, relief=tk.RIDGE)
+        self.garage_button.place(x=10, y=230)
+
+        # Packed text radio buttons
+        for song_name in config.SONGS.keys():
+            radio = tk.Radiobutton(
+                self.control_panel_frame,
+                text=song_name,
+                variable=self.song_var,
+                value=song_name,
+                command=self.play_song
+            )
+            radio.pack(anchor=tk.W)
+
+        # Image radio buttons
+        radio1 = ttk.Radiobutton(self.control_panel_frame, image=self.photo1, variable=self.song_var, 
+                                 value="Song 1", command=self.play_song, style="Custom.TRadiobutton")
+        radio1.place(x=620, y=190)
+
+        radio2 = ttk.Radiobutton(self.control_panel_frame, image=self.photo2, variable=self.song_var, 
+                                 value="Song 2", command=self.play_song, style="Custom.TRadiobutton")
+        radio2.place(x=690, y=190)
+
+        # Initialize button images
+        self.update_button_images(self.song_var.get())
+
+    def create_button_image(self, path, size):
+        button_image = Image.open(path).resize(size, Image.Resampling.LANCZOS)
+        return ImageTk.PhotoImage(button_image)
+
+    def update_button_images(self, song_name):
+        images = config.BUTTON_IMAGES.get(song_name, {})
+
+        hjhj_image = self.create_button_image(images.get("hjhj", "image/sim.jpg"), (200, 100))
+        self.hjhj_button.config(image=hjhj_image)
+        self.hjhj_button.image = hjhj_image
+
+        sd_image = self.create_button_image(images.get("sd", "image/shit.jpg"), (200, 100))
+        self.sd_button.config(image=sd_image)
+        self.sd_button.image = sd_image
+
+        door_image = self.create_button_image(images.get("door", "image/Door.jpg"), (200, 100))
+        self.door_button.config(image=door_image)
+        self.door_button.image = door_image
+
+        living_room_image = self.create_button_image(images.get("living_room", "image/LivingRoom.jpg"), (200, 100))
+        self.living_room_button.config(image=living_room_image)
+        self.living_room_button.image = living_room_image
+
+        bedroom_image = self.create_button_image(images.get("bedroom", "image/Bedroom.jpg"), (200, 100))
+        self.bedroom_button.config(image=bedroom_image)
+        self.bedroom_button.image = bedroom_image
+
+        garage_image = self.create_button_image(images.get("garage", "image/GARAGE.jpg"), (200, 100))
+        self.garage_button.config(image=garage_image)
+        self.garage_button.image = garage_image
+
+    def play_song(self):
+        selected_song = self.song_var.get()
+        if selected_song != self.current_song:
+            self.current_song = selected_song
+            song_path = config.SONGS[selected_song]
+            if pygame.mixer.music.get_busy():
+                pygame.mixer.music.stop()
+            pygame.mixer.music.load(song_path)
+            pygame.mixer.music.play(loops=-1)
+            self.change_background_control_panel(selected_song)
+            self.update_button_images(selected_song)
+
+    def change_background_control_panel(self, song_name):
+        image_path = config.BACKGROUND_IMAGES_CONTROL_PANEL[song_name]
+        self.load_new_background_control_panel(image_path)
+
+    def load_new_background_control_panel(self, image_path):
+        bg_image = Image.open(image_path).resize((800, 600), Image.Resampling.LANCZOS)
+        self.bg_photo_control_panel = ImageTk.PhotoImage(bg_image)
+        self.background_label_control_panel.config(image=self.bg_photo_control_panel)
+
+    def setup_bedroom_frame(self):
+        # Background
+        bg_path = config.BACKGROUND_IMAGES[self.current_bg_key]
+        bg_image = Image.open(bg_path).resize((800, 600), Image.Resampling.LANCZOS)
+        self.bedroom_bg_photo = ImageTk.PhotoImage(bg_image)
+
+        self.bedroom_bg_label = tk.Label(self.bedroom_frame, image=self.bedroom_bg_photo)
+        self.bedroom_bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+
+        # Temperature
+        self.temperature_label = tk.Label(self.bedroom_frame, text="Nhiệt độ: --", font="Helvetica 12 bold", bg='white')
+        self.temperature_label.place(x=530, y=100)
+
+        # Resize component images
+        self.door_img = self.resize_image("image/Door.jpg", 150, 80)
+        self.light_on_img = self.resize_image("image/light_on.jpg", 150, 80)
+        self.light_off_img = self.resize_image("image/light_off.jpg", 150, 80)
+        self.blink_img = self.resize_image("image/blink.jpg", 150, 80)
+        self.back_img = self.resize_image("image/back.jpg", 150, 80)
+
+        # Buttons
+        door_btn = tk.Button(self.bedroom_frame, image=self.door_img, command=self.toggle_door, bd=0)
+        door_btn.place(x=50, y=50)
+
+        self.light_button = tk.Button(
+            self.bedroom_frame, 
+            image=self.light_on_img if self.bedroom_light_status else self.light_off_img, 
+            command=self.toggle_bedroom_light, 
+            bd=0
+        )
+        self.light_button.place(x=50, y=140)
+
+        blink_btn = tk.Button(self.bedroom_frame, image=self.blink_img, command=self.bedroom_light_blink, bd=0)
+        blink_btn.place(x=50, y=230)
+
+        back_btn = tk.Button(self.bedroom_frame, image=self.back_img, command=self.back_to_main, bd=0)
+        back_btn.place(x=620, y=500)
+
+    def resize_image(self, image_path, width, height):
+        image = Image.open(image_path).resize((width, height), Image.Resampling.LANCZOS)
+        return ImageTk.PhotoImage(image)
+
+    def setup_livingroom_frame(self):
+        # Background
+        bg_path = config.BACKGROUND_IMAGES_LVR[self.current_bg_livingroom_key]
+        bg_image = Image.open(bg_path).resize((800, 600), Image.Resampling.LANCZOS)
+        self.livingroom_bg_photo = ImageTk.PhotoImage(bg_image)
+
+        self.background_label_livingroom = tk.Label(self.living_room_frame, image=self.livingroom_bg_photo)
+        self.background_label_livingroom.place(x=0, y=0, relwidth=1, relheight=1)
+
+        # Temperature
+        self.temperature_label_livingroom = tk.Label(self.living_room_frame, text="Nhiệt độ: --", font="Helvetica 12 bold", bg='white')
+        self.temperature_label_livingroom.place(x=140, y=150)
+
+        # Component images
+        self.fan_img = self.resize_image("image/Fan.jpg", 150, 80)
+        self.light_img = self.resize_image("image/Light.jpg", 150, 80)
+
+        # Buttons
+        light_btn = tk.Button(self.living_room_frame, image=self.light_img, command=self.toggle_livingroom_light, bd=0)
+        light_btn.place(x=600, y=50)
+
+        blink_btn = tk.Button(self.living_room_frame, image=self.blink_img, command=self.livingroom_light_blink, bd=0)
+        blink_btn.place(x=600, y=140)
+
+        fan_btn = tk.Button(self.living_room_frame, image=self.fan_img, command=self.toggle_fan, bd=0)
+        fan_btn.place(x=600, y=230)
+
+        door_btn = tk.Button(self.living_room_frame, image=self.door_img, command=self.toggle_door, bd=0)
+        door_btn.place(x=600, y=320)
+
+        back_btn = tk.Button(self.living_room_frame, image=self.back_img, command=self.back_to_main, bd=0)
+        back_btn.place(x=600, y=500)
+
+    def setup_garage_frame(self):
+        # Background
+        bg_image = Image.open(config.GARAGE_BG_IMAGE).resize((800, 600), Image.Resampling.LANCZOS)
+        self.garage_bg_photo = ImageTk.PhotoImage(bg_image)
+
+        self.background_label_garage = tk.Label(self.garage_frame, image=self.garage_bg_photo)
+        self.background_label_garage.place(x=0, y=0, relwidth=1, relheight=1)
+
+        # Temperature
+        self.temperature_label_garage = tk.Label(self.garage_frame, text="Nhiệt độ: --", font="Helvetica 12 bold", bg='white')
+        self.temperature_label_garage.place(x=280, y=190)
+
+        # Component images
+        self.up_img = self.resize_image("image/up.jpg", 150, 80)
+        self.down_img = self.resize_image("image/down.jpg", 150, 80)
+
+        # Buttons
+        self.btn_door_garage = tk.Button(
+            self.garage_frame, 
+            image=self.down_img if self.door_garage else self.up_img, 
+            command=self.garage_door, 
+            bd=0
+        )
+        self.btn_door_garage.place(x=600, y=30)
+
+        door_btn = tk.Button(self.garage_frame, image=self.door_img, command=self.toggle_door, bd=0)
+        door_btn.place(x=600, y=120)
+
+        back_btn = tk.Button(self.garage_frame, image=self.back_img, command=self.back_to_main, bd=0)
+        back_btn.place(x=600, y=500)
+
+    def show_frame(self, frame):
+        frame.tkraise()
+
+    def back_to_main(self):
+        self.show_frame(self.control_panel_frame)
+
+    def living_room(self):
+        self.show_frame(self.living_room_frame)
+
+    def bedroom(self):
+        self.show_frame(self.bedroom_frame)
+
+    def garage(self):
+        self.show_frame(self.garage_frame)
+
+    def show_error_image(self):
+        error_window = tk.Toplevel()
+        error_window.geometry('800x600+100+100')
+
+        error_image = Image.open(config.ERROR_IMAGE_PATH).resize((800, 600), Image.Resampling.LANCZOS)
+        error_photo = ImageTk.PhotoImage(error_image)
+
+        error_label = tk.Label(error_window, image=error_photo)
+        error_label.image = error_photo
+        error_label.pack()
+
+        error_window.after(5000, error_window.destroy)
+
+    def both_lights_blink(self):
+        self.serial.send_cmd(b"6")
+
+    def toggle_door(self):
+        if self.door_status:
+            if self.serial.send_cmd(b"d"):
+                self.door_status = False
         else:
-            s1.write(b"m") 
-            door_status = True
-    except Exception as e:
-        messagebox.showwarning("Error", f"Error: {e}")
+            if self.serial.send_cmd(b"m"):
+                self.door_status = True
 
-def living_room():
-    show_frame(living_room_frame)
-
-def bedroom():
-    show_frame(bedroom_frame)
-
-def garage():
-    show_frame(garage_frame)
-
-def toggle_bedroom_light():
-    global bedroom_light_status
-    try:
-        if bedroom_light_status:
-            s1.write(b'0') 
-            bedroom_light_status = False
+    def toggle_bedroom_light(self):
+        if self.bedroom_light_status:
+            if self.serial.send_cmd(b'0'):
+                self.bedroom_light_status = False
+                self.change_background("Day")
         else:
-            s1.write(b'1')
-            bedroom_light_status = True
-        light_button.config(image=light_off_img if bedroom_light_status else light_on_img)
-        if bedroom_light_status:
-            change_background("Night")
+            if self.serial.send_cmd(b'1'):
+                self.bedroom_light_status = True
+                self.change_background("Night")
+        self.light_button.config(image=self.light_off_img if self.bedroom_light_status else self.light_on_img)
+
+    def bedroom_light_blink(self):
+        self.serial.send_cmd(b'2')
+
+    def read_temperature(self):
+        temperature_data = self.serial.read_line()
+        if temperature_data:
+            self.temperature_label.config(text=f"{temperature_data} °C")
+            self.temperature_label_livingroom.config(text=f"{temperature_data} °C")
+            self.temperature_label_garage.config(text=f"{temperature_data} °C")
+        self.root.after(1000, self.read_temperature)
+
+    def hjhj(self):
+        self.serial.send_cmd(b"p")
+
+    def shjt(self):
+        self.serial.send_cmd(b"f")
+
+    def toggle_livingroom_light(self):
+        if self.livingroom_light_status:
+            if self.serial.send_cmd(b"4"):
+                self.livingroom_light_status = False
+                self.change_background_livingroom("DayLivingroom")
         else:
-            change_background("Day")
-    except serial.SerialException as e:
-        messagebox.showerror("Error", f"Error sending command to Arduino: {e}")
+            if self.serial.send_cmd(b"3"):
+                self.livingroom_light_status = True
+                self.change_background_livingroom("NightLivingroom")
+        self.light_button.config(image=self.light_on_img if self.livingroom_light_status else self.light_off_img)
 
-def bedroom_light_blink():
-    try:
-        s1.write(b'2')  
-    except serial.SerialException as e:
-        messagebox.showerror("Error", f"Error sending command to Arduino: {e}")
-
-def read_temperature():
-    try:
-        s1.write(b'n')
-        temperature_data = s1.readline().decode().strip()
-        temperature_label.config(text=f"{temperature_data} °C")
-        temperature_label_livingroom.config(text=f"{temperature_data} °C")
-        temperature_label_garage.config(text=f"{temperature_data} °C")
-        W.after(1000, read_temperature) 
-    except serial.SerialException as e:
-        messagebox.showerror("Error", f"Error sending request to Arduino: {e}")
-
-def hjhj():
-    try:
-        s1.write(b"p")
-    except Exception as e:
-        messagebox.showwarning("Error", f"Error: {e}")
-
-def shjt():
-    try:
-        s1.write(b"f")
-    except Exception as e:
-        messagebox.showwarning("Error", f"Error: {e}")
-        
-def toggle_livingroom_light():
-    global livingroom_light_status, light_on_img, light_off_img
-    try:
-        if livingroom_light_status:
-            s1.write(b"4")
-            livingroom_light_status = False
-            change_background_livingroom("DayLivingroom")
+    def garage_door(self):
+        if self.door_garage:
+            if self.serial.send_cmd(b"g"):
+                self.door_garage = False
         else:
-            s1.write(b"3") 
-            livingroom_light_status = True
-            change_background_livingroom("NightLivingroom")
-        
-        # Cập nhật hình ảnh của nút đèn
-        light_button.config(image=light_on_img if livingroom_light_status else light_off_img)
-        
-    except serial.SerialException as e:
-        messagebox.showerror("Error", f"Error sending command to Arduino: {e}")
+            if self.serial.send_cmd(b"e"):
+                self.door_garage = True
+        self.btn_door_garage.config(image=self.up_img if self.door_garage else self.down_img)
 
-def garage_door():
-    global door_garage
-    try:
-        if door_garage:
-            s1.write(b"g")
-            door_garage = False
+    def livingroom_light_blink(self):
+        self.serial.send_cmd(b"5")
+
+    def toggle_fan(self):
+        if self.fan_status:
+            if self.serial.send_cmd(b"t"):
+                self.fan_status = False
         else:
-            s1.write(b"e")
-            door_garage = True
-        
-        btn_door_garage.config(image=up_img if door_garage else down_img)
-    except Exception as e:
-        messagebox.showwarning("Error", f"Error: {e}")
-def livingroom_light_blink():
-    try:
-        s1.write(b"5")
-    except Exception as e:
-        messagebox.showwarning("Error", f"Error: {e}")
+            if self.serial.send_cmd(b"b"):
+                self.fan_status = True
 
-def toggle_fan():
-    global fan_status
-    try:
-        if fan_status:
-            s1.write(b"t")
-            fan_status = False
-        else:
-            s1.write(b"b")
-            fan_status = True
-    except Exception as e:
-        messagebox.showwarning("Error", f"Error: {e}")
+    def change_background(self, option):
+        self.current_bg_key = option
+        image_path = config.BACKGROUND_IMAGES[option]
+        bg_image = Image.open(image_path).resize((800, 600), Image.Resampling.LANCZOS)
+        self.bedroom_bg_photo = ImageTk.PhotoImage(bg_image)
+        self.bedroom_bg_label.config(image=self.bedroom_bg_photo)
 
-def change_background_livingroom(option1):
-    global current_bg_livingroom_key
-    current_bg_livingroom_key = option1
-    image_path = background_images_lvr[option1]
-    load_new_background_livingroom(image_path)
+    def change_background_livingroom(self, option1):
+        self.current_bg_livingroom_key = option1
+        image_path = config.BACKGROUND_IMAGES_LVR[option1]
+        bg_image = Image.open(image_path).resize((800, 600), Image.Resampling.LANCZOS)
+        self.livingroom_bg_photo = ImageTk.PhotoImage(bg_image)
+        self.background_label_livingroom.config(image=self.livingroom_bg_photo)
 
-def load_new_background_livingroom(image_path):
-    background_image = Image.open(image_path)
-    background_image = background_image.resize((800, 600), Image.Resampling.LANCZOS)
-    background_photo = ImageTk.PhotoImage(background_image)
-    background_label_livingroom.config(image=background_photo)
-    background_label_livingroom.image = background_photo  # Keep a reference
+    def on_closing(self):
+        self.serial.close()
+        self.root.destroy()
 
-def change_background(option):
-    global current_bg_key
-    current_bg_key = option
-    image_path = background_images[option]
-    load_new_background(image_path)
-
-def back_to_main():
-    show_frame(control_panel_frame)
-
-def load_new_background(image_path):
-    background_image = Image.open(image_path)
-    background_image = background_image.resize((800, 600), Image.Resampling.LANCZOS)  
-    background_photo = ImageTk.PhotoImage(background_image)
-    background_label.config(image=background_photo)
-    background_label.image = background_photo  
-
-def mail():
-    try:
-        # Connect to the SMTP server
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()  # Upgrade the connection to a secure encrypted SSL/TLS connection
-        server.login(sender_email, sender_password)  # Log in to the email account
-        server.send_message(message)  # Send the email
-        print("Email sent successfully!")
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-    finally:
-        server.quit()  # Close the connection to the SMTP server
-
-password_frame = tk.Frame(W)
-video_frame = tk.Frame(W)
-control_panel_frame = tk.Frame(W)
-bedroom_frame = tk.Frame(W)
-living_room_frame = tk.Frame(W)
-garage_frame = tk.Frame(W)   
-
-for frame in (password_frame, video_frame, control_panel_frame, bedroom_frame, living_room_frame,garage_frame):
-    frame.grid(row=0, column=0, sticky='nsew')
-
-
-A = Image.open('Bill.png') 
-A = A.resize((800, 600), Image.Resampling.LANCZOS)
-photo = ImageTk.PhotoImage(A)
-
-L1 = tk.Label(password_frame, image=photo)
-L1.image = photo  
-L1.pack(pady=20)
-
-custom_font = tkfont.Font(family="Algerian", size=20)
-
-label_password = tk.Label(password_frame, text="Nhập mật khẩu:", bg="black", fg="white", font=custom_font)
-label_password.place(x=50, y=280)
-
-entry = tk.Entry(password_frame, show="*", bg="black", fg="white", font=custom_font, width=10)
-entry.place(x=70, y=330)
-
-entry.bind("<Return>", lambda event: check_password())
-entry.bind("<KeyRelease>", lambda event: on_key_release(event))
-
-def on_key_release(event):
-    if len(entry.get()) == 4:
-        check_password()
-
-video_label = tk.Label(video_frame)
-video_label.pack()
-
-control_panel_frame.configure(bg="#F0F0F0")
-
-initial_bg_path_control_panel = background_images_control_panel["Song 1"]
-background_image_control_panel = Image.open(initial_bg_path_control_panel)
-background_image_control_panel = background_image_control_panel.resize((800, 600), Image.Resampling.LANCZOS)
-background_photo_control_panel = ImageTk.PhotoImage(background_image_control_panel)
-background_label_control_panel = tk.Label(control_panel_frame, image=background_photo_control_panel)
-background_label_control_panel.image = background_photo_control_panel
-
-background_label_control_panel.place(x=0, y=0) 
-background_label_control_panel.lower()
-
-def create_button_image(path, size):
-    button_image = Image.open(path)
-    button_image = button_image.resize(size, Image.Resampling.LANCZOS)
-    return ImageTk.PhotoImage(button_image)
-
-hjhj_button = tk.Button(control_panel_frame, command=hjhj, relief=tk.RIDGE)
-hjhj_button.place(x=590, y=10)
-
-sd_button = tk.Button(control_panel_frame, command=shjt, relief=tk.RIDGE)
-sd_button.place(x=590, y=490)
-
-door_button = tk.Button(control_panel_frame, command=toggle_door, relief=tk.RIDGE)
-door_button.place(x=10, y=485)
-
-living_room_button = tk.Button(control_panel_frame, command=living_room, relief=tk.RIDGE)
-living_room_button.place(x=10, y=10)
-
-bedroom_button = tk.Button(control_panel_frame, command=bedroom, relief=tk.RIDGE)
-bedroom_button.place(x=10, y=120)
-
-garage_button = tk.Button(control_panel_frame, command=garage, relief=tk.RIDGE)
-garage_button.place(x=10, y=230)
-
-background_image_path = background_images[current_bg_key]
-background_image = Image.open(background_image_path)
-background_image = background_image.resize((800, 600), Image.Resampling.LANCZOS)  # Resize to fit window
-background_photo = ImageTk.PhotoImage(background_image)
-background_label = tk.Label(bedroom_frame, image=background_photo)
-background_label.place(x=0, y=0, relwidth=1, relheight=1)
-
-temperature_label = tk.Label(bedroom_frame, text="Nhiệt độ: --", font="Helvetica 12 bold", bg='white')
-temperature_label.place(x=530, y=100)
-
-background_image_path_livingroom = background_images_lvr[current_bg_livingroom_key]
-background_image_livingroom = Image.open(background_image_path_livingroom)
-background_image_livingroom = background_image_livingroom.resize((800, 600), Image.Resampling.LANCZOS)
-background_photo_livingroom = ImageTk.PhotoImage(background_image_livingroom)
-
-background_label_livingroom = tk.Label(living_room_frame, image=background_photo_livingroom)
-background_label_livingroom.place(x=0, y=0, relwidth=1, relheight=1)
-
-temperature_label_livingroom = tk.Label(living_room_frame, text="Nhiệt độ: --", font="Helvetica 12 bold", bg='white')
-temperature_label_livingroom.place(x=140, y=150)
-
-background_image_path_garage = "garage1.jpg"
-background_image_garage = Image.open(background_image_path_garage)
-background_image_garage = background_image_garage.resize((800, 600), Image.Resampling.LANCZOS)
-background_photo_garage = ImageTk.PhotoImage(background_image_garage)
-
-background_label_garage = tk.Label(garage_frame, image=background_photo_garage)
-background_label_garage.place(x=0, y=0, relwidth=1, relheight=1)
-
-temperature_label_garage = tk.Label(garage_frame, text="Nhiệt độ: --", font="Helvetica 12 bold", bg='white')
-temperature_label_garage.place(x=280, y=190)
-
-def resize_image(image_path, width, height):
-    image = Image.open(image_path)
-    image = image.resize((width, height), Image.Resampling.LANCZOS)
-    return ImageTk.PhotoImage(image)
-
-door_img = resize_image("door.jpg", 150, 80)
-light_on_img = resize_image("light_on.jpg", 150, 80)
-light_off_img = resize_image("light_off.jpg", 150, 80)
-blink_img = resize_image("blink.jpg", 150, 80)
-back_img = resize_image("back.jpg", 150, 80)
-fan_img = resize_image("fan.jpg", 150, 80)
-return_img = resize_image("back.jpg", 150, 80)
-up_img = resize_image("up.jpg", 150, 80)
-down_img = resize_image("down.jpg", 150, 80)
-light_img = resize_image("Light.jpg",150,80)
-
-door_button_bedroom = tk.Button(bedroom_frame, image=door_img, command=toggle_door, bd=0)
-door_button_bedroom.place(x=50, y=50)
-
-light_button = tk.Button(bedroom_frame, image=light_on_img if bedroom_light_status else light_off_img, command=toggle_bedroom_light, bd=0)
-light_button.place(x=50, y=140)
-
-blink_button = tk.Button(bedroom_frame, image=blink_img, command=bedroom_light_blink, bd=0)
-blink_button.place(x=50, y=230)
-
-back_button = tk.Button(bedroom_frame, image=back_img, command=back_to_main, bd=0)
-back_button.place(x=620, y=500)
-
-light_button_livingroom = tk.Button(living_room_frame, image=light_img, command=toggle_livingroom_light, bd=0)
-light_button_livingroom.place(x=600, y=50)
-
-btn_livingroom_blink = tk.Button(living_room_frame, image=blink_img, command=livingroom_light_blink, bd=0)
-btn_livingroom_blink.place(x=600, y=140)
-
-btn_toggle_fan = tk.Button(living_room_frame, image=fan_img, command=toggle_fan, bd=0)
-btn_toggle_fan.place(x=600, y=230)
-
-btn_door = tk.Button(living_room_frame, image=door_img, command=toggle_door, bd=0)
-btn_door.place(x=600, y=320)
-
-btn_return = tk.Button(living_room_frame, image=return_img, command=back_to_main, bd=0)
-btn_return.place(x=600, y=500)
-#Garage
-btn_door_garage = tk.Button(garage_frame, image=(down_img if door_garage else up_img), command=garage_door, bd=0)
-btn_door_garage.place(x=600, y=30)
-
-btn_door = tk.Button(garage_frame, image=door_img, command=toggle_door, bd=0)
-btn_door.place(x=600, y=120)
-
-btn_return = tk.Button(garage_frame, image=return_img, command=back_to_main, bd=0)
-btn_return.place(x=600, y=500)
-
-radio1 = ttk.Radiobutton(control_panel_frame, image=photo1, variable=song_var, value="Song 1", command=play_song, style="Custom.TRadiobutton")
-radio1.image = photo1  
-radio1.place(x=620, y=190)
-
-radio2 = ttk.Radiobutton(control_panel_frame, image=photo2, variable=song_var, value="Song 2", command=play_song, style="Custom.TRadiobutton")
-radio2.image = photo2  
-radio2.place(x=690, y=190)
-    
-W.after(1000, read_temperature)
-
-show_frame(password_frame)
-
-def close_serial():
-    if s1.is_open:
-        s1.close()
-
-def on_closing():
-    close_serial()
-    W.destroy()
-
-W.protocol("WM_DELETE_WINDOW", on_closing)
-
-W.mainloop()
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = SmartHomeApp(root)
+    root.mainloop()
