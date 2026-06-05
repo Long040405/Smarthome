@@ -6,7 +6,7 @@ class DummySerial:
         self.is_open = False
 
     def write(self, data):
-        print(f"[Dummy Serial] Gửi lệnh Arduino: {data}")
+        print(f"[Dummy Serial] Sent Arduino command: {data}")
 
     def readline(self):
         # Simulate a fluctuating room temperature around 25-27 °C
@@ -29,10 +29,10 @@ class SerialHandler:
     def connect(self):
         try:
             self.connection = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
-            print(f"Đã kết nối thành công cổng {self.port}.")
+            print(f"Successfully connected to port {self.port}.")
         except Exception as e:
-            print(f"Không thể kết nối cổng {self.port}: {e}")
-            print("Đang khởi động chế độ giả lập (DummySerial)...")
+            print(f"Failed to connect to port {self.port}: {e}")
+            print("Starting Simulation Mode (DummySerial)...")
             self.connection = DummySerial()
 
     def send_cmd(self, cmd):
@@ -42,7 +42,7 @@ class SerialHandler:
                 self.connection.write(cmd)
                 return True
             except Exception as e:
-                print(f"Lỗi khi gửi dữ liệu serial: {e}")
+                print(f"Error sending serial data: {e}")
         return False
 
     def read_line(self):
@@ -51,7 +51,7 @@ class SerialHandler:
             try:
                 return self.connection.readline().decode().strip()
             except Exception as e:
-                print(f"Lỗi khi đọc dữ liệu serial: {e}")
+                print(f"Error reading serial data: {e}")
         return ""
 
     def close(self):

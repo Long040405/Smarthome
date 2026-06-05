@@ -1,77 +1,77 @@
 # Smarthome Bill Cipher Dashboard
 
-Ứng dụng điều khiển Nhà thông minh (Smarthome) tích hợp giao tiếp phần cứng Arduino, thiết kế giao diện độc đáo lấy cảm hứng từ nhân vật Bill Cipher (Gravity Falls).
+A smart home control application (Smarthome) integrated with Arduino hardware communication, featuring a unique user interface design inspired by the character Bill Cipher (Gravity Falls).
 
-Dự án được xây dựng bằng ngôn ngữ Python, sử dụng thư viện Tkinter/CustomTkinter cho phần giao diện, OpenCV để phát video mở khóa, Pygame làm trình phát nhạc nền, và pySerial để đồng bộ hóa trạng thái với mạch Arduino thực tế.
-
----
-
-## Giao diện chính của Dashboard
-
-Dưới đây là 2 phong cách giao diện chính của Dashboard Smarthome tương ứng với 2 chủ đề được lựa chọn trong ứng dụng:
-
-### 1. Chủ đề Dipper (Dipper Theme)
-![Giao diện Dashboard chủ đề Dipper](image/ui_dipper.png)
-
-### 2. Chủ đề Bill Cipher (Bill Cipher Theme)
-![Giao diện Dashboard chủ đề Bill Cipher](image/ui_bill.png)
+The project is built in Python, using Tkinter/CustomTkinter for the GUI, OpenCV to play the unlock video, Pygame for background music playback, and pySerial to synchronize states with the physical Arduino board.
 
 ---
 
-## Các Tính năng Nổi bật
+## Main Dashboard UI
 
-### Bảo mật và Xác thực Đăng nhập
-* Yêu cầu nhập mật khẩu truy cập (mặc định: 1111) với hiệu ứng ẩn mật khẩu.
-* Tự động kích hoạt khi gõ đủ 4 chữ số hoặc nhấn Enter.
-* **Cảnh báo bảo mật**: Nếu nhập sai quá 3 lần:
-  * Đèn LED phần cứng sẽ chớp nháy cảnh báo.
-  * Hiển thị màn hình khóa cảnh báo Bill Cipher.
-  * Tự động gửi Email cảnh báo qua Gmail tới hòm thư quản trị viên.
-  * Tự động tắt ứng dụng để bảo vệ hệ thống.
+Below are the two main dashboard UI styles corresponding to the two themes selectable in the application:
 
-### Hiệu ứng Mở khóa Sinh động
-* Khi đăng nhập thành công, một đoạn video mở khóa ngắn (Video/wc.mp4) sẽ được phát trực tiếp trên màn hình thông qua thư viện OpenCV trước khi chuyển vào bảng điều khiển.
+### 1. Dipper Theme
+![Dipper Theme Dashboard UI](image/ui_dipper.png)
 
-### Nhạc nền tự động theo chủ đề
-* Nhạc nền được phát lặp vô tận (loop) bằng pygame.mixer và tự động thay đổi tương ứng với chủ đề giao diện (Dipper Theme & Bill Cipher Theme) được người dùng lựa chọn. Khi đổi chủ đề, hình nền và hệ thống các nút điều khiển sẽ tự động chuyển đổi đồng bộ.
-
-### Quản lý và Điều khiển các Phòng
-* **Phòng ngủ (Bedroom)**: Điều khiển Đèn (Bật/Tắt/Nháy) đổi màu hình nền phòng theo chế độ Ngày/Đêm, Mở/Đóng cửa và hiển thị Nhiệt độ thời gian thực.
-* **Phòng khách (Living Room)**: Điều khiển Quạt (Bật/Tắt), Đèn chiếu sáng, Đèn nháy và Đóng/Mở cửa ra vào.
-* **Nhà xe (Garage)**: Đóng/Mở cửa cuốn garage (Up/Down) và Cửa thông phòng.
-
-### Tích hợp Arduino và Chế độ Giả lập (Dummy Mode)
-* Đồng bộ lệnh điều khiển trực tiếp với vi điều khiển Arduino qua giao tiếp Serial.
-* **Chế độ Giả lập (DummySerial)**: Nếu không kết nối được mạch Arduino phần cứng (ví dụ: chạy trên máy tính phát triển không cắm dây nối), ứng dụng sẽ tự chuyển sang chế độ giả lập. Toàn bộ lệnh điều khiển sẽ được in ra console và nhiệt độ phòng được giả lập ngẫu nhiên từ 25-27 độ C giúp việc kiểm thử giao diện mượt mà không bị crash ứng dụng.
+### 2. Bill Cipher Theme
+![Bill Cipher Theme Dashboard UI](image/ui_bill.png)
 
 ---
 
-## Cấu trúc Mã nguồn (Modular Architecture)
+## Key Features
 
-Dự án được cấu trúc thành các file riêng biệt nhằm phục vụ mục đích mở rộng và bảo trì dễ dàng:
+### Security & Authentication
+* Requires a passcode for entry (default: 1111) with password masking.
+* Automatically triggers verification once 4 digits are typed or Enter is pressed.
+* **Security Alerts**: If an incorrect passcode is entered more than 3 times:
+  * The hardware LED flashes to signal an alert.
+  * A custom Bill Cipher lock screen warning is displayed.
+  * An alert email is sent automatically via Gmail to the administrator's inbox.
+  * The application exits immediately to secure the system.
 
-* `main.py`: Điểm chạy chính của ứng dụng, chứa toàn bộ luồng giao diện Tkinter và quản lý trạng thái các phòng thông qua lớp SmartHomeApp.
-* `config.py`: Chứa toàn bộ cấu hình tĩnh, tài khoản SMTP gửi mail, thiết lập cổng serial phần cứng và các đường dẫn tài nguyên tĩnh (hình ảnh, âm thanh, video).
-* `serial_handler.py`: Quản lý việc kết nối cổng nối tiếp serial với Arduino và tích hợp bộ giả lập DummySerial.
-* `email_sender.py`: Tiện ích kết nối SMTP server gửi email cảnh báo bảo mật.
+### Interactive Unlock Effect
+* Upon successful authentication, a short unlocking video (`Video/wc.mp4`) plays on the screen via OpenCV before entering the main control panel.
+
+### Theme-based Background Music
+* Background music loops infinitely using `pygame.mixer` and automatically switches based on the selected user interface theme (Dipper Theme & Bill Cipher Theme). Changing the theme updates both the background and button graphics accordingly.
+
+### Room Control & Management
+* **Bedroom**: Control the bedroom light (On/Off/Blink), switch the bedroom background according to Day/Night mode, open/close the door, and view the real-time temperature.
+* **Living Room**: Control the fan (On/Off), room lighting, flashing lights, and open/close the main door.
+* **Garage**: Open/close the garage door (Up/Down) and the connecting door.
+
+### Arduino Integration & Simulation (Dummy Mode)
+* Synchronizes commands directly with the Arduino microcontroller via Serial communication.
+* **Simulation Mode (DummySerial)**: If no hardware Arduino is connected (e.g., during development or testing on a computer without a serial connection), the app automatically switches to dummy mode. All commands are logged to the console, and room temperature values are randomly simulated between 25-27 °C for a seamless GUI experience without application crashes.
 
 ---
 
-## Hướng dẫn Cài đặt và Chạy ứng dụng
+## Modular Architecture
 
-### 1. Yêu cầu hệ thống
-* Python 3.10 trở lên.
-* Máy tính đã cài đặt các thư viện cần thiết.
+The project is structured modularly for easy maintenance and scaling:
 
-### 2. Cài đặt các thư viện phụ thuộc
-Mở terminal tại thư mục dự án và chạy lệnh:
+* `main.py`: The entry point of the application, managing Tkinter frames and room states inside the `SmartHomeApp` class.
+* `config.py`: Stores static configurations, SMTP email credentials, hardware serial settings, and resource paths (images, audio, video).
+* `serial_handler.py`: Manages the serial communication connection with Arduino and implements the `DummySerial` simulation fallback.
+* `email_sender.py`: A helper utility to connect to the SMTP server and send security alert emails.
+
+---
+
+## Installation & Setup
+
+### 1. System Requirements
+* Python 3.10 or higher.
+* Necessary dependencies installed.
+
+### 2. Install Dependencies
+Open a terminal in the project directory and run:
 ```bash
 pip install customtkinter pillow opencv-python pyserial pygame
 ```
 
-### 3. Khởi chạy ứng dụng
-Chạy file main bằng lệnh:
+### 3. Launch the Application
+Run the main script:
 ```bash
 python3 main.py
 ```
-> **Mẹo**: Nếu bạn chưa cắm mạch Arduino, chương trình sẽ thông báo lỗi cổng kết nối và tự động khởi chạy giao diện ở chế độ giả lập. Bạn có thể gõ mật khẩu 1111 (lưu ý chuyển bộ gõ sang tiếng Anh để tránh lỗi) để mở khóa trải nghiệm ứng dụng.
+> **Tip**: If you don't have the Arduino board connected, the program will log a connection error and automatically launch in simulation mode. Type `1111` as the passcode to unlock and explore the application.

@@ -10,18 +10,18 @@ def send_warning_email():
         message = MIMEMultipart()
         message["From"] = config.SENDER_EMAIL
         message["To"] = config.RECIPIENT_EMAIL
-        message["Subject"] = "Cảnh Báo: Đăng Nhập Quá Nhiều Lần"
+        message["Subject"] = "Warning: Too Many Login Attempts"
 
         # Email content
         body = """\
-Chào bạn,
+Hello,
 
-Hệ thống đã phát hiện số lượng đăng nhập không hợp lệ quá mức cho phép.
+The system has detected an excessive number of invalid login attempts.
 
-Nếu bạn không thực hiện các hoạt động đăng nhập này, vui lòng liên hệ với bộ phận hỗ trợ ngay lập tức.
+If you did not perform these login attempts, please contact support immediately.
 
-Cảm ơn bạn,
-~Nhóm LoNi2H~
+Best regards,
+~LoNi2H Team~
 """
         message.attach(MIMEText(body, "plain"))
 

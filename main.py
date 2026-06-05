@@ -94,7 +94,7 @@ class SmartHomeApp:
 
         custom_font = tkfont.Font(family="Algerian", size=20)
 
-        label_password = tk.Label(L1, text="Nhập mật khẩu:", bg="black", fg="white", font=custom_font)
+        label_password = tk.Label(L1, text="Enter password:", bg="black", fg="white", font=custom_font)
         label_password.place(x=50, y=280)
 
         self.entry = tk.Entry(L1, show="*", bg="black", fg="white", font=custom_font, width=10)
@@ -112,7 +112,7 @@ class SmartHomeApp:
     def check_password(self):
         password = self.entry.get()
         if password == config.ACCESS_PASSWORD:
-            print("Đăng nhập thành công!")
+            print("Login successful!")
             self.play_song()
             self.show_frame(self.video_frame)
             self.play_unlocked_video(config.UNLOCKED_VIDEO_PATH)
@@ -124,7 +124,7 @@ class SmartHomeApp:
                 send_warning_email()
                 self.root.withdraw()
             else:
-                messagebox.showerror("Lỗi", f"Sai mật khẩu! Bạn còn {config.MAX_WRONG_ATTEMPTS - self.wrong_attempts} lần thử.")
+                messagebox.showerror("Error", f"Incorrect password! You have {config.MAX_WRONG_ATTEMPTS - self.wrong_attempts} attempts remaining.")
                 self.entry.delete(0, tk.END)
 
     def setup_video_frame(self):
@@ -270,7 +270,7 @@ class SmartHomeApp:
         self.bedroom_bg_label.place(x=0, y=0, relwidth=1, relheight=1)
 
         # Temperature
-        self.temperature_label = tk.Label(self.bedroom_frame, text="Nhiệt độ: --", font="Helvetica 12 bold", bg='white')
+        self.temperature_label = tk.Label(self.bedroom_frame, text="Temperature: --", font="Helvetica 12 bold", bg='white')
         self.temperature_label.place(x=530, y=100)
 
         # Resize component images
@@ -312,7 +312,7 @@ class SmartHomeApp:
         self.background_label_livingroom.place(x=0, y=0, relwidth=1, relheight=1)
 
         # Temperature
-        self.temperature_label_livingroom = tk.Label(self.living_room_frame, text="Nhiệt độ: --", font="Helvetica 12 bold", bg='white')
+        self.temperature_label_livingroom = tk.Label(self.living_room_frame, text="Temperature: --", font="Helvetica 12 bold", bg='white')
         self.temperature_label_livingroom.place(x=140, y=150)
 
         # Component images
@@ -344,7 +344,7 @@ class SmartHomeApp:
         self.background_label_garage.place(x=0, y=0, relwidth=1, relheight=1)
 
         # Temperature
-        self.temperature_label_garage = tk.Label(self.garage_frame, text="Nhiệt độ: --", font="Helvetica 12 bold", bg='white')
+        self.temperature_label_garage = tk.Label(self.garage_frame, text="Temperature: --", font="Helvetica 12 bold", bg='white')
         self.temperature_label_garage.place(x=280, y=190)
 
         # Component images
